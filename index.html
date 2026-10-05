@@ -98,7 +98,6 @@ main{position:relative;z-index:1;flex:1;min-height:0;display:flex}
   position:relative;flex:1;min-height:240px;margin:4px 18px 0;border-radius:32px;overflow:hidden;
   background:
     radial-gradient(ellipse at 28% 22%,rgba(255,255,255,.16),transparent 55%),
-    repeating-radial-gradient(circle at 70% 120%,rgba(255,255,255,.035) 0 18px,transparent 18px 44px),
     linear-gradient(170deg,var(--water),var(--water-deep));
   transition:background .9s ease;
 }
@@ -282,6 +281,50 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 #songSheet h2{margin:0;font-size:22px;font-weight:600;flex:none}
 #songSheet audio{width:100%;margin-top:14px}
 .share{font-size:16px;font-weight:500;padding:11px 18px;border-radius:999px;background:var(--paper)}
+
+/* ---------- bubbly, hand-made shapes ---------- */
+:root{
+  --blob-1:42px 58px 46px 62px / 56px 44px 60px 48px;
+  --blob-2:60px 44px 64px 46px / 46px 60px 44px 58px;
+  --blob-3:50px 64px 42px 56px / 62px 48px 56px 42px;
+  --pill-1:26px 34px 28px 38px / 34px 26px 38px 28px;
+  --pill-2:36px 26px 38px 28px / 26px 36px 28px 38px;
+  --bub-1:52% 48% 55% 45% / 48% 54% 46% 52%;
+  --bub-2:46% 54% 44% 56% / 55% 45% 53% 47%;
+  --bub-3:55% 45% 50% 50% / 45% 52% 48% 55%;
+}
+.pond{border-radius:64px 92px 72px 98px / 82px 60px 94px 70px}
+.dust{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.rec:nth-child(1){border-radius:var(--blob-1)}
+.rec:nth-child(2){border-radius:var(--blob-2)}
+.rec:nth-child(3){border-radius:var(--blob-3)}
+.ringcard:nth-child(1){border-radius:var(--blob-2)}
+.ringcard:nth-child(2){border-radius:var(--blob-3)}
+.ringcard:nth-child(3){border-radius:var(--blob-1)}
+.panel:nth-child(1){border-radius:var(--blob-3)}
+.panel:nth-child(2){border-radius:var(--blob-1)}
+.aslot:nth-child(1){border-radius:var(--blob-1)}
+.aslot:nth-child(2){border-radius:var(--blob-2)}
+.tabs,.world-btn,.done,.share,.mute,.woff,.rm,.toast,.tune,.steps,.types button:nth-child(odd){border-radius:var(--pill-1)}
+.tabs button:nth-child(1),.next,.listen,.songrec,.seg,.pitch,.sel-wrap select,.ed-top input,.wopt,.types button:nth-child(even){border-radius:var(--pill-2)}
+.tabs button:nth-child(2){border-radius:var(--pill-1)}
+.seg button:nth-child(odd){border-radius:var(--pill-1)}
+.seg button:nth-child(even){border-radius:var(--pill-2)}
+.chip:nth-child(odd){border-radius:var(--pill-1)}
+.chip:nth-child(even){border-radius:var(--pill-2)}
+.play,.steps button,.wopt .wi{border-radius:var(--bub-1)}
+.hub,.pitch button{border-radius:var(--bub-2)}
+.slot:nth-child(3n){border-radius:var(--bub-1)}
+.slot:nth-child(3n+1){border-radius:var(--bub-2)}
+.slot:nth-child(3n+2){border-radius:var(--bub-3)}
+.pop,.wmenu{border-radius:var(--blob-2)}
+.sheet{border-radius:48px 66px 0 0 / 40px 54px 0 0}
+.wave{border-radius:28px 40px 30px 44px / 36px 28px 42px 30px}
+input[type=range]{border-radius:6px 10px 7px 9px}
+input[type=range]::-webkit-slider-thumb{border-radius:52% 48% 55% 45% / 48% 54% 46% 52%}
+button{transition:transform .18s cubic-bezier(.3,1.6,.5,1),background-color .25s,color .25s}
+button:active{transform:scale(.94)}
+@media (prefers-reduced-motion:reduce){button:active{transform:none}}
 </style>
 </head>
 <body>
@@ -298,6 +341,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   <!-- PAGE 1 -->
   <section id="page-safna" class="page on">
     <div id="pond" class="pond">
+      <canvas id="dust" class="dust" aria-hidden="true"></canvas>
       <div id="pondEmpty" class="pond-empty">Hljóðin sem þú tekur upp fljóta hingað. Byrjaðu á að taka upp eitt hljóð hér fyrir neðan.</div>
     </div>
     <div class="rec-row">
@@ -1665,11 +1709,60 @@ $('#root').addEventListener('change', function(e){ S.root = +e.target.value; sav
   document.addEventListener(ev, function(){ if (ctx && ctx.state !== 'running') ctx.resume(); }, {passive:true});
 });
 
+
+/* ---------- Floating dust & bubbles in the pond ---------- */
+var dust = $('#dust'), dctx = dust.getContext ? dust.getContext('2d') : null, motes = [], dustW = 0, dustH = 0;
+var DUST_COL = {base:'255,255,255', tofrar:'242,167,255', haf:'220,250,255', geimur:'255,233,163', robot:'56,225,255'};
+function newMote(atBottom){
+  var md = mode(), bubble = Math.random() < (md === 'haf' ? 0.6 : 0.28);
+  return {x:Math.random()*dustW, y:atBottom ? dustH + 10 : Math.random()*dustH,
+    r:bubble ? 2.5 + Math.random()*5 : 0.7 + Math.random()*1.8, b:bubble,
+    vy:-(bubble ? 7 + Math.random()*12 : 2 + Math.random()*5), ph:Math.random()*6.28, wf:0.4 + Math.random()*0.9, a:0.2 + Math.random()*0.45};
+}
+function sizeDust(){
+  var w = pond.clientWidth, h = pond.clientHeight;
+  if (!w || !dctx) return false;
+  if (w !== dustW || h !== dustH){
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    dustW = w; dustH = h; dust.width = Math.round(w*dpr); dust.height = Math.round(h*dpr);
+    dctx.setTransform(dpr,0,0,dpr,0,0);
+    var want = clamp(Math.round(w*h/9000), 24, 70);
+    while (motes.length < want) motes.push(newMote(false));
+    motes.length = want;
+  }
+  return true;
+}
+function drawDust(dt){
+  if (!sizeDust()) return;
+  var md = mode() || 'base', col = DUST_COL[md], sp = REDUCED ? 0.25 : (md === 'geimur' ? 0.35 : 1);
+  dctx.clearRect(0, 0, dustW, dustH);
+  for (var i=0;i<motes.length;i++){
+    var m = motes[i];
+    m.ph += dt*m.wf;
+    m.y += m.vy*dt*sp; m.x += Math.sin(m.ph)*7*dt*sp;
+    if (m.y < -12 || m.x < -12 || m.x > dustW + 12){ motes[i] = m = newMote(true); }
+    var a = m.a;
+    if (md === 'tofrar' || md === 'geimur') a *= 0.55 + 0.45*Math.sin(m.ph*3);
+    if (md === 'robot'){
+      dctx.fillStyle = 'rgba(' + col + ',' + a.toFixed(3) + ')';
+      var s = m.b ? m.r*1.2 : m.r*1.6; dctx.fillRect(Math.round(m.x), Math.round(m.y), s, s);
+    } else if (m.b){
+      dctx.strokeStyle = 'rgba(' + col + ',' + (a*0.9).toFixed(3) + ')'; dctx.lineWidth = 1.2;
+      dctx.beginPath(); dctx.arc(m.x, m.y, m.r, 0, 6.2832); dctx.stroke();
+      dctx.fillStyle = 'rgba(' + col + ',' + (a*0.8).toFixed(3) + ')';
+      dctx.beginPath(); dctx.arc(m.x - m.r*0.35, m.y - m.r*0.35, m.r*0.22, 0, 6.2832); dctx.fill();
+    } else {
+      dctx.fillStyle = 'rgba(' + col + ',' + a.toFixed(3) + ')';
+      dctx.beginPath(); dctx.arc(m.x, m.y, m.r, 0, 6.2832); dctx.fill();
+    }
+  }
+}
+
 /* ---------- Main animation loop ---------- */
 var lastF = performance.now();
 function frame(now){
   var dt = Math.min(0.05, (now - lastF)/1000); lastF = now;
-  if ($('#page-safna').classList.contains('on')) physics(dt);
+  if ($('#page-safna').classList.contains('on')){ physics(dt); drawDust(dt); }
   if (ctx && playing){
     var t = ctx.currentTime;
     while (vq.length && vq[0].t <= t){
